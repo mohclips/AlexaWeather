@@ -1,0 +1,16 @@
+[DEFAULT]
+APP_TITLE = Home Automation
+
+# in seconds
+WU_DATA_AGE = 300
+
+# only this skill can access this function
+my_alexa_skill_id = amzn1.ask.skill.3d6xxxx-dxx0-xxxx-bxxd-exxxxxxxfb7
+
+# weather underground
+wu_station_id = XXXXXXXXX
+# leave these alone
+wu_unit = metric
+wu_version=2.0
+wu_format=json
+
