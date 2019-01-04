@@ -1,19 +1,28 @@
-from __future__ import print_function
-import requests
+#from __future__ import print_function
+import requests # pylint: disable=E0401
 import json
 import configparser
 
 import time
 
+import logging
+
 #
 # speech synthesis https://developer.amazon.com/docs/custom-skills/speech-synthesis-markup-language-ssml-reference.html
 #
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logging.basicConfig(format='%(asctime)s %(message)s',level=logging.DEBUG)
 
 #
 # Read in config from file
 #
 config = configparser.ConfigParser()
-config.read('config.ini')
+try:
+    config.read('config.ini')
+except Exception as e:
+    logger.error('Cannot read the config.ini')
 
 APP_TITLE = config['DEFAULT']['APP_TITLE']
 WU_DATA_AGE = config['DEFAULT']['WU_DATA_AGE'] # seconds before checking WU API
@@ -29,9 +38,9 @@ wu_format = config['DEFAULT']['wu_format']
 def handler(event, context):
 
     # all print() ends up in the CloudWatch logs - 5GB free
-    print('******** ' + APP_TITLE + ' Lambda Alexa Skill running ********')
-    print('Event:', json.dumps(event))
-    print('remote appId',event['session']['application']['applicationId'])
+    logger.info('******** ' + APP_TITLE + ' Lambda Alexa Skill running ********')
+    logger.info('Event: '+json.dumps(event))
+    logger.info('remote appId '+event['session']['application']['applicationId'])
 
     # make sure only our skill calls this function
     incoming_appid = event['session']['application']['applicationId']
@@ -54,13 +63,13 @@ def handler(event, context):
         return on_session_ended(event['request'], event['session'])
 
     else:
-        print('Error unknown request type:',ert)
+        logger.error('unknown request type: '+ert)
 
 
 def on_session_started(session_started_request, session):
     """ Called when the session starts """
 
-    print("on_session_started requestId=" + session_started_request['requestId']
+    logger.info("on_session_started requestId=" + session_started_request['requestId']
           + ", sessionId=" + session['sessionId'])
 
 
@@ -68,7 +77,7 @@ def on_launch(launch_request, session):
     """ Called when the user launches the skill without specifying what they want
     """
 
-    print("on_launch requestId=" + launch_request['requestId'] +
+    logger.info("on_launch requestId=" + launch_request['requestId'] +
           ", sessionId=" + session['sessionId'])
     # Dispatch to your skill's launch
     return get_welcome_response()
@@ -77,7 +86,7 @@ def on_launch(launch_request, session):
 def on_intent(intent_request, session):
     """ Called when the user specifies an intent for this skill """
 
-    print("on_intent requestId=" + intent_request['requestId'] + ", sessionId=" + session['sessionId'])
+    logger.info("on_intent requestId=" + intent_request['requestId'] + ", sessionId=" + session['sessionId'])
 
     intent = intent_request['intent']
     intent_name = intent_request['intent']['name']
@@ -103,7 +112,7 @@ def on_intent(intent_request, session):
     elif intent_name == "AMAZON.FallbackIntent": # what happens if Alexa didnt understand what was said
         return fallback_intent()
     else:
-        print('Error Invalid Intent:',intent)
+        logger.error('Invalid Intent: '+intent)
         raise ValueError("Invalid intent") # if you get here, then you need to code more intents, check your logs
 
 
@@ -113,7 +122,7 @@ def on_session_ended(session_ended_request, session):
     Is not called when the skill returns should_end_session=true
     """
 
-    print("on_session_ended requestId=" + session_ended_request['requestId'] +
+    logger.info("on_session_ended requestId=" + session_ended_request['requestId'] +
           ", sessionId=" + session['sessionId'])
     # add cleanup logic here
 
@@ -124,7 +133,7 @@ def get_welcome_response():
     """ If we wanted to initialize the session to have some attributes we could
     add those here
     """
-    print('welcome response')
+    logger.info('welcome response')
 
     session_attributes = {}
     card_title = "Welcome"
@@ -141,7 +150,7 @@ def fallback_intent():
     """ If we wanted to initialize the session to have some attributes we could
     add those here
     """
-    print('fallback intent')
+    logger.info('fallback intent')
 
     session_attributes = {}
     card_title = "Opps"
@@ -157,7 +166,7 @@ def stop_intent():
     """ If we wanted to initialize the session to have some attributes we could
     add those here
     """
-    print('stop intent')
+    logger.info('stop intent')
 
     session_attributes = {}
     card_title = "Bye"
@@ -192,7 +201,7 @@ def get_weather_data():
     Download current weather report from Weather Underground API 
     """
 
-    print('get weather data')
+    logger.info('get weather data')
     r = requests.get("https://stationdata.wunderground.com/cgi-bin/stationlookup?"+
         "station="+wu_station_id+
         "&units="+wu_unit+
@@ -200,12 +209,15 @@ def get_weather_data():
         "&format="+wu_format
         )
 
-    #TODO:   Need error chcking here
+    if r.status_code != 200:
+        logger.error('wu status code:' +str(r.status_code))
+        logger.error('wu text: '+str(r.text))
+        raise ValueError("WU API returned non-200 code")
 
     wu = r.json()    
 
     wus = wu['stations'][wu_station_id]
-    print(json.dumps(wus)) # dump to logs incase it changes or we get errors
+    logger.info(json.dumps(wus)) # dump to logs incase it changes or we get errors
     return wus
 
 def KMHtoMPH(kmh):
@@ -218,24 +230,24 @@ def intent_getweather(intent, session):
     weather_action = intent['name']
     card_title = weather_action # for display gui
 
-    print('Weather Action: ',weather_action)
+    logger.info('Weather Action: '+weather_action)
 
     should_end_session = False
 
     # check if we already have the WU data, if not get it
     session_attributes = session.get('attributes', {})
     if 'wus' not in session_attributes:
-        print('need wus data')
+        logger.info('need wu data')
         wus = get_weather_data()
         session_attributes['wus'] = wus
     else:
-        print('use session attributes')
+        logger.info('use session attributes')
         wus = session_attributes['wus']
         updated = wus['updated']# last update timestamp
 
         # is data too old, then get it again
         last_updated = time.time() - updated
-        print('last update:',last_updated)
+        logger.info('last update: '+last_updated)
         if last_updated > WU_DATA_AGE:
             wus = get_weather_data()
             session_attributes['wus'] = wus
@@ -328,6 +340,6 @@ def build_response(session_attributes, speechlet_response):
         'sessionAttributes': session_attributes,
         'response': speechlet_response
     }
-    print('SAY:',response['response']['outputSpeech']['text'])
+    logger.info('SAY: '+response['response']['outputSpeech']['text'])
     return response
 
