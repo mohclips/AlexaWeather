@@ -13,7 +13,7 @@ import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-logging.basicConfig(format='%(asctime)s %(message)s',level=logging.DEBUG)
+#logging.basicConfig(format='%(asctime)s %(message)s',level=logging.DEBUG)
 
 #
 # Read in config from file
@@ -112,7 +112,7 @@ def on_intent(intent_request, session):
     elif intent_name == "AMAZON.FallbackIntent": # what happens if Alexa didnt understand what was said
         return fallback_intent()
     else:
-        logger.error('Invalid Intent: '+intent)
+        logger.error('Invalid Intent: '+str(intent))
         raise ValueError("Invalid intent") # if you get here, then you need to code more intents, check your logs
 
 
@@ -247,7 +247,7 @@ def intent_getweather(intent, session):
 
         # is data too old, then get it again
         last_updated = time.time() - updated
-        logger.info('last update: '+last_updated)
+        logger.info('last update: '+str(last_updated))
         if last_updated > WU_DATA_AGE:
             wus = get_weather_data()
             session_attributes['wus'] = wus
@@ -297,12 +297,9 @@ def intent_getweather(intent, session):
     elif weather_action == 'getDetails':
         speech_output = "No details yet." 
 
-
     else:
         speech_output = APP_TITLE + " did not understand that. Please try again."
-
         reprompt_text = "Please tell me the command I should send to your " + APP_TITLE +  "system"
-
 
     return build_response(session_attributes, build_speechlet_response(
         card_title, speech_output, reprompt_text, should_end_session))
